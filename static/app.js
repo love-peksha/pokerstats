@@ -1,6 +1,8 @@
 const state = {
   selectedBuyIns: new Set(),
   selectedMultipliers: new Set(),
+  selectedWeekdays: new Set(),
+  selectedTimeSlots: new Set(),
   prizePoolMin: "",
   prizePoolMax: "",
   startedAtFrom: "",
@@ -8,11 +10,34 @@ const state = {
   filters: {
     buy_ins_cents: [],
     multipliers: [],
+    weekdays: [],
+    time_slots: [],
     prize_pools_cents: [],
     started_at_min: null,
     started_at_max: null,
   },
 };
+
+const WEEKDAY_META = [
+  { value: 1, shortLabel: "Пн", fullLabel: "Понедельник" },
+  { value: 2, shortLabel: "Вт", fullLabel: "Вторник" },
+  { value: 3, shortLabel: "Ср", fullLabel: "Среда" },
+  { value: 4, shortLabel: "Чт", fullLabel: "Четверг" },
+  { value: 5, shortLabel: "Пт", fullLabel: "Пятница" },
+  { value: 6, shortLabel: "Сб", fullLabel: "Суббота" },
+  { value: 7, shortLabel: "Вс", fullLabel: "Воскресенье" },
+];
+
+const TIME_SLOT_META = [
+  { value: "night", label: "Ночь" },
+  { value: "morning", label: "Утро" },
+  { value: "day", label: "День" },
+  { value: "evening", label: "Вечер" },
+];
+
+const weekdayMetaByValue = new Map(WEEKDAY_META.map((item) => [item.value, item]));
+const timeSlotMetaByValue = new Map(TIME_SLOT_META.map((item) => [item.value, item]));
+const timeSlotOrder = new Map(TIME_SLOT_META.map((item, index) => [item.value, index]));
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -78,6 +103,12 @@ function buildQueryString() {
   [...state.selectedMultipliers]
     .sort((left, right) => left - right)
     .forEach((value) => params.append("multiplier", value.toString()));
+  [...state.selectedWeekdays]
+    .sort((left, right) => left - right)
+    .forEach((value) => params.append("weekday", value.toString()));
+  [...state.selectedTimeSlots]
+    .sort((left, right) => (timeSlotOrder.get(left) ?? 0) - (timeSlotOrder.get(right) ?? 0))
+    .forEach((value) => params.append("time_slot", value));
 
   if (state.prizePoolMin !== "") {
     params.set("prize_pool_min", state.prizePoolMin);
@@ -154,7 +185,20 @@ function renderSummary(summary) {
       note: "Выплаты минус бай-ины",
       tone: "is-profit",
     },
+    {
+      label: "ROI",
+      value: `${summary.roi_pct.toFixed(2)}%`,
+      note: `Чистый результат / сумма бай-инов: ${centsToCurrency(summary.total_buy_ins_cents)}`,
+      tone: "is-profit",
+    },
   ];
+
+  items.splice(6, 0, {
+    label: "\u0424\u0430\u043a\u0442\u0438\u0447\u0435\u0441\u043a\u0438\u0439 \u0440\u0435\u0439\u043a",
+    value: `${summary.actual_rake_pct.toFixed(2)}%`,
+    note: `\u0421\u043e\u0431\u0440\u0430\u043d\u043e ${centsToCurrency(summary.total_entry_buy_ins_cents)}, \u0432\u044b\u043f\u043b\u0430\u0447\u0435\u043d\u043e ${centsToCurrency(summary.total_prize_pools_cents)}`,
+    tone: "is-soft",
+  });
 
   document.getElementById("summary-grid").innerHTML = items
     .map(
@@ -401,6 +445,65 @@ function renderMultiplierOptions(multipliers) {
   });
 }
 
+function renderWeekdayOptions(weekdays) {
+  const container = document.getElementById("weekday-options");
+  container.innerHTML = weekdays
+    .map((value) => {
+      const checked = state.selectedWeekdays.has(value) ? "checked" : "";
+      const weekday = weekdayMetaByValue.get(value);
+      const shortLabel = weekday ? weekday.shortLabel : value.toString();
+      const fullLabel = weekday ? weekday.fullLabel : value.toString();
+      return `
+        <label class="chip" title="${escapeHtml(fullLabel)}">
+          <input type="checkbox" value="${value}" ${checked}>
+          <span>${escapeHtml(shortLabel)}</span>
+        </label>
+      `;
+    })
+    .join("");
+
+  container.querySelectorAll("input[type='checkbox']").forEach((checkbox) => {
+    checkbox.addEventListener("change", async (event) => {
+      const value = Number(event.target.value);
+      if (event.target.checked) {
+        state.selectedWeekdays.add(value);
+      } else {
+        state.selectedWeekdays.delete(value);
+      }
+      await refreshDashboard();
+    });
+  });
+}
+
+function renderTimeSlotOptions(timeSlots) {
+  const container = document.getElementById("time-slot-options");
+  container.innerHTML = timeSlots
+    .map((value) => {
+      const checked = state.selectedTimeSlots.has(value) ? "checked" : "";
+      const timeSlot = timeSlotMetaByValue.get(value);
+      const label = timeSlot ? timeSlot.label : value;
+      return `
+        <label class="chip">
+          <input type="checkbox" value="${escapeHtml(value)}" ${checked}>
+          <span>${escapeHtml(label)}</span>
+        </label>
+      `;
+    })
+    .join("");
+
+  container.querySelectorAll("input[type='checkbox']").forEach((checkbox) => {
+    checkbox.addEventListener("change", async (event) => {
+      const value = event.target.value;
+      if (event.target.checked) {
+        state.selectedTimeSlots.add(value);
+      } else {
+        state.selectedTimeSlots.delete(value);
+      }
+      await refreshDashboard();
+    });
+  });
+}
+
 function renderPrizePoolHints(prizePools) {
   const hints = prizePools
     .slice(0, 12)
@@ -438,6 +541,8 @@ async function refreshDashboard() {
   state.filters = payload.filters;
   renderBuyInOptions(payload.filters.buy_ins_cents);
   renderMultiplierOptions(payload.filters.multipliers);
+  renderWeekdayOptions(payload.filters.weekdays || []);
+  renderTimeSlotOptions(payload.filters.time_slots || []);
   renderPrizePoolHints(payload.filters.prize_pools_cents);
   renderStartedAtBounds(payload.filters);
   renderSummary(payload.summary);
@@ -485,6 +590,8 @@ function wireInputs() {
   resetButton.addEventListener("click", async () => {
     state.selectedBuyIns.clear();
     state.selectedMultipliers.clear();
+    state.selectedWeekdays.clear();
+    state.selectedTimeSlots.clear();
     state.prizePoolMin = "";
     state.prizePoolMax = "";
     state.startedAtFrom = "";

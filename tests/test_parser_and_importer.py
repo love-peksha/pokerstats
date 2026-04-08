@@ -39,6 +39,15 @@ Tournament started 2026/03/24 16:25:29
 You finished in 4th place.
 """
 
+SAMPLE_MONDAY = """Tournament #273700001, Spin&Gold #18, Hold'em No Limit
+Buy-in: $1
+6 Players
+Total Prize Pool: $6
+Tournament started 2026/03/23 21:10:00 
+1st : Hero, $6
+You finished in 1st place.
+"""
+
 
 def build_zip_bytes(files: dict[str, str]) -> bytes:
     buffer = io.BytesIO()
@@ -51,10 +60,12 @@ def build_zip_bytes(files: dict[str, str]) -> bytes:
 class ParserAndImporterTests(unittest.TestCase):
     def test_parse_filters_normalizes_datetime_local_range(self) -> None:
         filters = _parse_filters(
-            "multiplier=6&multiplier=8&started_at_from=2026-03-24T15%3A32&started_at_to=2026-03-24T15%3A32"
+            "multiplier=6&multiplier=8&weekday=1&weekday=7&time_slot=night&time_slot=evening&started_at_from=2026-03-24T15%3A32&started_at_to=2026-03-24T15%3A32"
         )
 
         self.assertEqual(filters.multipliers, [6, 8])
+        self.assertEqual(filters.weekdays, [1, 7])
+        self.assertEqual(filters.time_slots, ["night", "evening"])
         self.assertEqual(filters.started_at_from, "2026-03-24 15:32:00")
         self.assertEqual(filters.started_at_to, "2026-03-24 15:32:59")
 
@@ -100,6 +111,10 @@ class ParserAndImporterTests(unittest.TestCase):
 
             self.assertEqual(dashboard["summary"]["total_tournaments"], 3)
             self.assertEqual(dashboard["summary"]["total_buy_ins_cents"], 625)
+            self.assertEqual(dashboard["summary"]["total_entry_buy_ins_cents"], 3750)
+            self.assertEqual(dashboard["summary"]["total_prize_pools_cents"], 3950)
+            self.assertEqual(dashboard["summary"]["actual_rake_pct"], -5.33)
+            self.assertEqual(dashboard["summary"]["roi_pct"], -52.0)
             self.assertEqual(dashboard["summary"]["average_prize_pool_share_pct"], 12.5)
             self.assertEqual(len(dashboard["distribution"]), 2)
             self.assertEqual(dashboard["distribution"][0]["place"], 2)
@@ -115,6 +130,8 @@ class ParserAndImporterTests(unittest.TestCase):
                 100.0,
             )
             self.assertEqual(dashboard["filters"]["buy_ins_cents"], [25, 100, 500])
+            self.assertEqual(dashboard["filters"]["weekdays"], [2])
+            self.assertEqual(dashboard["filters"]["time_slots"], ["night", "day"])
 
             filtered_dashboard = build_dashboard(
                 db_path,
@@ -122,6 +139,10 @@ class ParserAndImporterTests(unittest.TestCase):
             )
             self.assertEqual(filtered_dashboard["summary"]["total_tournaments"], 1)
             self.assertEqual(filtered_dashboard["summary"]["total_buy_ins_cents"], 500)
+            self.assertEqual(filtered_dashboard["summary"]["total_entry_buy_ins_cents"], 3000)
+            self.assertEqual(filtered_dashboard["summary"]["total_prize_pools_cents"], 3000)
+            self.assertEqual(filtered_dashboard["summary"]["actual_rake_pct"], 0.0)
+            self.assertEqual(filtered_dashboard["summary"]["roi_pct"], -100.0)
             self.assertEqual(filtered_dashboard["summary"]["average_prize_pool_share_pct"], 0.0)
             self.assertEqual(filtered_dashboard["filters"]["prize_pools_cents"], [3000])
 
@@ -144,8 +165,58 @@ class ParserAndImporterTests(unittest.TestCase):
             self.assertEqual(time_filtered_dashboard["recent_tournaments"][0]["tournament_id"], "273614396")
             self.assertEqual(time_filtered_dashboard["filters"]["buy_ins_cents"], [25, 100])
             self.assertEqual(time_filtered_dashboard["filters"]["multipliers"], [6, 8])
+            self.assertEqual(time_filtered_dashboard["filters"]["weekdays"], [2])
+            self.assertEqual(time_filtered_dashboard["filters"]["time_slots"], ["day"])
             self.assertEqual(time_filtered_dashboard["filters"]["started_at_min"], "2026-03-24 02:59:41")
             self.assertEqual(time_filtered_dashboard["filters"]["started_at_max"], "2026-03-24 16:25:29")
+
+    def test_dashboard_filters_by_weekday(self) -> None:
+        archive_bytes = build_zip_bytes(
+            {
+                "one.txt": SAMPLE_1_DOLLAR,
+                "two.txt": SAMPLE_5_DOLLAR,
+                "three.txt": SAMPLE_025_DOLLAR,
+                "monday.txt": SAMPLE_MONDAY,
+            }
+        )
+
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "stats.sqlite3"
+            ensure_database(db_path)
+            import_archive_bytes(db_path, "batch-weekdays.zip", archive_bytes)
+
+            monday_dashboard = build_dashboard(
+                db_path,
+                TournamentFilters(weekdays=[1]),
+            )
+
+            self.assertEqual(monday_dashboard["summary"]["total_tournaments"], 1)
+            self.assertEqual(monday_dashboard["recent_tournaments"][0]["tournament_id"], "273700001")
+            self.assertEqual(monday_dashboard["filters"]["weekdays"], [1, 2])
+
+    def test_dashboard_filters_by_time_slot(self) -> None:
+        archive_bytes = build_zip_bytes(
+            {
+                "one.txt": SAMPLE_1_DOLLAR,
+                "two.txt": SAMPLE_5_DOLLAR,
+                "three.txt": SAMPLE_025_DOLLAR,
+                "monday.txt": SAMPLE_MONDAY,
+            }
+        )
+
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "stats.sqlite3"
+            ensure_database(db_path)
+            import_archive_bytes(db_path, "batch-timeslots.zip", archive_bytes)
+
+            night_dashboard = build_dashboard(
+                db_path,
+                TournamentFilters(time_slots=["night"]),
+            )
+
+            self.assertEqual(night_dashboard["summary"]["total_tournaments"], 1)
+            self.assertEqual(night_dashboard["recent_tournaments"][0]["tournament_id"], "273517027")
+            self.assertEqual(night_dashboard["filters"]["time_slots"], ["night", "day", "evening"])
 
 
 if __name__ == "__main__":

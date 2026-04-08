@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from pokerstats.importer import import_archive_bytes
 from pokerstats.parser import money_to_cents
-from pokerstats.storage import TournamentFilters, build_dashboard
+from pokerstats.storage import TIME_SLOT_VALUES, TournamentFilters, build_dashboard
 
 
 def _safe_filename(filename: str) -> str:
@@ -60,6 +60,8 @@ def _parse_filters(query: str) -> TournamentFilters:
     params = parse_qs(query, keep_blank_values=False)
     buy_in_values = [money_to_cents(value) for value in params.get("buy_in", []) if value]
     multiplier_values: list[int] = []
+    weekday_values: list[int] = []
+    time_slot_values: list[str] = []
     for value in params.get("multiplier", []):
         if not value:
             continue
@@ -70,6 +72,25 @@ def _parse_filters(query: str) -> TournamentFilters:
         if multiplier <= 0:
             raise ValueError(f"Некорректный множитель: {value}")
         multiplier_values.append(multiplier)
+
+    for value in params.get("weekday", []):
+        if not value:
+            continue
+        try:
+            weekday = int(value)
+        except ValueError as error:
+            raise ValueError(f"Некорректный день недели: {value}") from error
+        if weekday < 1 or weekday > 7:
+            raise ValueError(f"Некорректный день недели: {value}")
+        weekday_values.append(weekday)
+
+    for value in params.get("time_slot", []):
+        if not value:
+            continue
+        cleaned_value = value.strip().lower()
+        if cleaned_value not in TIME_SLOT_VALUES:
+            raise ValueError(f"Некорректный промежуток времени: {value}")
+        time_slot_values.append(cleaned_value)
 
     prize_pool_min_cents = None
     prize_pool_max_cents = None
@@ -88,6 +109,8 @@ def _parse_filters(query: str) -> TournamentFilters:
     return TournamentFilters(
         buy_in_cents=buy_in_values,
         multipliers=multiplier_values,
+        weekdays=weekday_values,
+        time_slots=time_slot_values,
         prize_pool_min_cents=prize_pool_min_cents,
         prize_pool_max_cents=prize_pool_max_cents,
         started_at_from=started_at_from,

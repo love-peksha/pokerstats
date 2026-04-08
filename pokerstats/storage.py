@@ -20,11 +20,21 @@ EXPECTED_PRIZE_POOL_WEIGHTS_BY_MULTIPLIER = {
     200_000: 20,
 }
 EXPECTED_PLACE_SHARE_PCT = round(100 / 6, 2)
+TIME_SLOT_VALUES = ("night", "morning", "day", "evening")
 MULTIPLIER_SQL_EXPRESSION = """
 CASE
     WHEN buy_in_cents > 0 AND total_prize_pool_cents % buy_in_cents = 0
     THEN total_prize_pool_cents / buy_in_cents
     ELSE NULL
+END
+""".strip()
+WEEKDAY_SQL_EXPRESSION = "((CAST(strftime('%w', started_at) AS INTEGER) + 6) % 7) + 1"
+TIME_SLOT_SQL_EXPRESSION = """
+CASE
+    WHEN CAST(strftime('%H', started_at) AS INTEGER) BETWEEN 0 AND 5 THEN 'night'
+    WHEN CAST(strftime('%H', started_at) AS INTEGER) BETWEEN 6 AND 11 THEN 'morning'
+    WHEN CAST(strftime('%H', started_at) AS INTEGER) BETWEEN 12 AND 17 THEN 'day'
+    ELSE 'evening'
 END
 """.strip()
 
@@ -33,6 +43,8 @@ END
 class TournamentFilters:
     buy_in_cents: list[int] = field(default_factory=list)
     multipliers: list[int] = field(default_factory=list)
+    weekdays: list[int] = field(default_factory=list)
+    time_slots: list[str] = field(default_factory=list)
     prize_pool_min_cents: int | None = None
     prize_pool_max_cents: int | None = None
     started_at_from: str | None = None
@@ -44,12 +56,16 @@ def copy_filters(
     *,
     include_buy_in: bool = True,
     include_multipliers: bool = True,
+    include_weekdays: bool = True,
+    include_time_slots: bool = True,
     include_prize_pool: bool = True,
     include_started_at: bool = True,
 ) -> TournamentFilters:
     return TournamentFilters(
         buy_in_cents=list(filters.buy_in_cents) if include_buy_in else [],
         multipliers=list(filters.multipliers) if include_multipliers else [],
+        weekdays=list(filters.weekdays) if include_weekdays else [],
+        time_slots=list(filters.time_slots) if include_time_slots else [],
         prize_pool_min_cents=filters.prize_pool_min_cents if include_prize_pool else None,
         prize_pool_max_cents=filters.prize_pool_max_cents if include_prize_pool else None,
         started_at_from=filters.started_at_from if include_started_at else None,
@@ -220,6 +236,16 @@ def build_where_clause(filters: TournamentFilters) -> tuple[str, list[object]]:
         clauses.append(f"{MULTIPLIER_SQL_EXPRESSION} IN ({placeholders})")
         params.extend(filters.multipliers)
 
+    if filters.weekdays:
+        placeholders = ", ".join("?" for _ in filters.weekdays)
+        clauses.append(f"{WEEKDAY_SQL_EXPRESSION} IN ({placeholders})")
+        params.extend(filters.weekdays)
+
+    if filters.time_slots:
+        placeholders = ", ".join("?" for _ in filters.time_slots)
+        clauses.append(f"{TIME_SLOT_SQL_EXPRESSION} IN ({placeholders})")
+        params.extend(filters.time_slots)
+
     if filters.prize_pool_min_cents is not None:
         clauses.append("total_prize_pool_cents >= ?")
         params.append(filters.prize_pool_min_cents)
@@ -266,6 +292,8 @@ def _fetch_summary(connection: sqlite3.Connection, filters: TournamentFilters) -
                 0
             ) AS average_prize_pool_share_pct,
             COALESCE(SUM(buy_in_cents), 0) AS total_buy_ins_cents,
+            COALESCE(SUM(buy_in_cents * players), 0) AS total_entry_buy_ins_cents,
+            COALESCE(SUM(total_prize_pool_cents), 0) AS total_prize_pools_cents,
             COALESCE(SUM(payout_cents - buy_in_cents), 0) AS net_profit_cents
         FROM tournaments
         {where_clause}
@@ -276,6 +304,10 @@ def _fetch_summary(connection: sqlite3.Connection, filters: TournamentFilters) -
     wins = int(row["wins"])
     top_two = int(row["top_two"])
     itm = int(row["in_the_money"])
+    total_buy_ins_cents = int(row["total_buy_ins_cents"])
+    total_entry_buy_ins_cents = int(row["total_entry_buy_ins_cents"])
+    total_prize_pools_cents = int(row["total_prize_pools_cents"])
+    net_profit_cents = int(row["net_profit_cents"])
     return {
         "total_tournaments": total_tournaments,
         "average_place": float(row["average_place"]),
@@ -286,8 +318,19 @@ def _fetch_summary(connection: sqlite3.Connection, filters: TournamentFilters) -
         "in_the_money": itm,
         "in_the_money_rate": round((itm / total_tournaments) * 100, 2) if total_tournaments else 0.0,
         "average_prize_pool_share_pct": float(row["average_prize_pool_share_pct"]),
-        "total_buy_ins_cents": int(row["total_buy_ins_cents"]),
-        "net_profit_cents": int(row["net_profit_cents"]),
+        "total_buy_ins_cents": total_buy_ins_cents,
+        "total_entry_buy_ins_cents": total_entry_buy_ins_cents,
+        "total_prize_pools_cents": total_prize_pools_cents,
+        "actual_rake_pct": round(
+            (1 - (total_prize_pools_cents / total_entry_buy_ins_cents)) * 100,
+            2,
+        )
+        if total_entry_buy_ins_cents
+        else 0.0,
+        "net_profit_cents": net_profit_cents,
+        "roi_pct": round((net_profit_cents / total_buy_ins_cents) * 100, 2)
+        if total_buy_ins_cents
+        else 0.0,
     }
 
 
@@ -528,6 +571,46 @@ def _fetch_distinct_multipliers(
     return [int(row["multiplier"]) for row in rows if row["multiplier"] is not None]
 
 
+def _fetch_distinct_weekdays(
+    connection: sqlite3.Connection,
+    filters: TournamentFilters,
+) -> list[int]:
+    where_clause, params = build_where_clause(filters)
+    rows = connection.execute(
+        f"""
+        SELECT DISTINCT {WEEKDAY_SQL_EXPRESSION} AS weekday
+        FROM tournaments
+        {where_clause}
+        ORDER BY weekday
+        """,
+        params,
+    ).fetchall()
+    return [int(row["weekday"]) for row in rows if row["weekday"] is not None]
+
+
+def _fetch_distinct_time_slots(
+    connection: sqlite3.Connection,
+    filters: TournamentFilters,
+) -> list[str]:
+    where_clause, params = build_where_clause(filters)
+    rows = connection.execute(
+        f"""
+        SELECT DISTINCT {TIME_SLOT_SQL_EXPRESSION} AS time_slot
+        FROM tournaments
+        {where_clause}
+        ORDER BY CASE time_slot
+            WHEN 'night' THEN 1
+            WHEN 'morning' THEN 2
+            WHEN 'day' THEN 3
+            WHEN 'evening' THEN 4
+            ELSE 5
+        END
+        """,
+        params,
+    ).fetchall()
+    return [row["time_slot"] for row in rows if row["time_slot"] in TIME_SLOT_VALUES]
+
+
 def _fetch_started_at_bounds(
     connection: sqlite3.Connection,
     filters: TournamentFilters,
@@ -552,11 +635,13 @@ def _fetch_started_at_bounds(
 def _fetch_filter_options(
     connection: sqlite3.Connection,
     filters: TournamentFilters,
-) -> dict[str, list[int] | str | None]:
+) -> dict[str, object]:
     buy_in_filters = copy_filters(
         filters,
         include_buy_in=False,
         include_multipliers=True,
+        include_weekdays=True,
+        include_time_slots=True,
         include_prize_pool=True,
         include_started_at=True,
     )
@@ -564,6 +649,26 @@ def _fetch_filter_options(
         filters,
         include_buy_in=True,
         include_multipliers=False,
+        include_weekdays=True,
+        include_time_slots=True,
+        include_prize_pool=True,
+        include_started_at=True,
+    )
+    weekday_filters = copy_filters(
+        filters,
+        include_buy_in=True,
+        include_multipliers=True,
+        include_weekdays=False,
+        include_time_slots=True,
+        include_prize_pool=True,
+        include_started_at=True,
+    )
+    time_slot_filters = copy_filters(
+        filters,
+        include_buy_in=True,
+        include_multipliers=True,
+        include_weekdays=True,
+        include_time_slots=False,
         include_prize_pool=True,
         include_started_at=True,
     )
@@ -571,6 +676,8 @@ def _fetch_filter_options(
         filters,
         include_buy_in=True,
         include_multipliers=True,
+        include_weekdays=True,
+        include_time_slots=True,
         include_prize_pool=False,
         include_started_at=True,
     )
@@ -578,6 +685,8 @@ def _fetch_filter_options(
         filters,
         include_buy_in=True,
         include_multipliers=True,
+        include_weekdays=True,
+        include_time_slots=True,
         include_prize_pool=True,
         include_started_at=False,
     )
@@ -601,12 +710,14 @@ def _fetch_filter_options(
     return {
         "buy_ins_cents": buy_ins,
         "multipliers": _fetch_distinct_multipliers(connection, multiplier_filters),
+        "weekdays": _fetch_distinct_weekdays(connection, weekday_filters),
+        "time_slots": _fetch_distinct_time_slots(connection, time_slot_filters),
         "prize_pools_cents": prize_pools,
         **_fetch_started_at_bounds(connection, started_at_filters),
     }
 
 
-def fetch_filter_options(db_path: Path) -> dict[str, list[int] | str | None]:
+def fetch_filter_options(db_path: Path) -> dict[str, object]:
     with open_connection(db_path) as connection:
         return _fetch_filter_options(connection, TournamentFilters())
 

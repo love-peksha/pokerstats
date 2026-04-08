@@ -64,17 +64,30 @@
               <div id="prize-pool-hints" class="hint-list"></div>
             </div>
 
-            <div class="filter-block">
+            <div class="filter-block filter-block-date">
               <span class="filter-label">Дата и время</span>
-              <div class="range-grid">
-                <label>
-                  <span>От</span>
-                  <input id="started-at-from" type="datetime-local">
-                </label>
-                <label>
-                  <span>До</span>
-                  <input id="started-at-to" type="datetime-local">
-                </label>
+              <div class="date-filter-layout">
+                <div class="date-filter-section">
+                  <span class="subfilter-label">Период</span>
+                  <div class="range-grid date-range-grid">
+                    <label>
+                      <span>От</span>
+                      <input id="started-at-from" type="datetime-local">
+                    </label>
+                    <label>
+                      <span>До</span>
+                      <input id="started-at-to" type="datetime-local">
+                    </label>
+                  </div>
+                </div>
+                <div class="date-filter-section">
+                  <span class="subfilter-label">Дни недели</span>
+                  <div id="weekday-options" class="chip-grid weekday-grid"></div>
+                </div>
+                <div class="date-filter-section">
+                  <span class="subfilter-label">Время суток</span>
+                  <div id="time-slot-options" class="chip-grid time-slot-grid"></div>
+                </div>
               </div>
             </div>
           </div>

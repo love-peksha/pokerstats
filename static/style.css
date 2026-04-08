@@ -312,6 +312,10 @@ button.secondary,
   border: 1px solid rgba(25, 50, 46, 0.06);
 }
 
+.filter-block-date {
+  grid-column: span 2;
+}
+
 .filter-label,
 .summary-label {
   margin: 0;
@@ -326,6 +330,27 @@ button.secondary,
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.date-filter-layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px 18px;
+  align-items: start;
+}
+
+.date-filter-section {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.subfilter-label {
+  color: var(--muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
 }
 
 .chip {
@@ -366,6 +391,10 @@ button.secondary,
   gap: 12px;
 }
 
+.date-range-grid {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
 .range-grid label {
   display: grid;
   gap: 8px;
@@ -375,6 +404,33 @@ button.secondary,
 .range-grid label span {
   color: var(--muted);
   font-size: 0.92rem;
+}
+
+.range-grid input[type="datetime-local"] {
+  min-width: 0;
+}
+
+.weekday-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  gap: 10px;
+}
+
+.time-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 10px;
+}
+
+.weekday-grid .chip,
+.time-slot-grid .chip {
+  display: flex;
+}
+
+.weekday-grid .chip span,
+.time-slot-grid .chip span {
+  width: 100%;
+  padding-inline: 10px;
 }
 
 .summary-grid {
@@ -711,6 +767,14 @@ button.secondary,
 
   .filters-grid,
   .range-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-block-date {
+    grid-column: auto;
+  }
+
+  .date-filter-layout {
     grid-template-columns: 1fr;
   }
 
