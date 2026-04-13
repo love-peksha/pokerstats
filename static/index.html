@@ -64,6 +64,50 @@
               <div id="prize-pool-hints" class="hint-list"></div>
             </div>
 
+            <div class="filter-block filter-block-rakeback">
+              <span class="filter-label">Рейкбек</span>
+              <div class="slider-stack">
+                <label class="slider-field">
+                  <div class="slider-head">
+                    <span>Multiplier в программе</span>
+                    <strong id="rakeback-multiplier-value">1.5x</strong>
+                  </div>
+                  <input
+                    id="rakeback-multiplier"
+                    type="range"
+                    min="0"
+                    max="7"
+                    step="1"
+                    value="0"
+                  >
+                  <div class="slider-extremes">
+                    <span>1.5x</span>
+                    <span>5x</span>
+                  </div>
+                </label>
+
+                <label class="slider-field">
+                  <div class="slider-head">
+                    <span>Курс обмена gems</span>
+                    <strong id="gems-per-dollar-value">1000 gems / $1</strong>
+                  </div>
+                  <input
+                    id="gems-per-dollar"
+                    type="range"
+                    min="0"
+                    max="11"
+                    step="1"
+                    value="0"
+                  >
+                  <div class="slider-extremes">
+                    <span>1000</span>
+                    <span>650</span>
+                  </div>
+                </label>
+              </div>
+              <p class="rakeback-note">Расчёт идёт от заявленного рейка 7%.</p>
+            </div>
+
             <div class="filter-block filter-block-date">
               <span class="filter-label">Дата и время</span>
               <div class="date-filter-layout">

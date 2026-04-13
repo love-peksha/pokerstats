@@ -7,6 +7,9 @@ const state = {
   prizePoolMax: "",
   startedAtFrom: "",
   startedAtTo: "",
+  rakebackMultiplier: 1.5,
+  gemsPerDollar: 1000,
+  dashboard: null,
   filters: {
     buy_ins_cents: [],
     multipliers: [],
@@ -35,6 +38,12 @@ const TIME_SLOT_META = [
   { value: "evening", label: "Вечер" },
 ];
 
+const DECLARED_RAKE_PCT = 7;
+const RAKEBACK_MULTIPLIER_OPTIONS = [1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5];
+const GEMS_PER_DOLLAR_OPTIONS = [1000, 950, 920, 910, 900, 880, 840, 800, 750, 720, 660, 650];
+const DEFAULT_RAKEBACK_MULTIPLIER = RAKEBACK_MULTIPLIER_OPTIONS[0];
+const DEFAULT_GEMS_PER_DOLLAR = GEMS_PER_DOLLAR_OPTIONS[0];
+
 const weekdayMetaByValue = new Map(WEEKDAY_META.map((item) => [item.value, item]));
 const timeSlotMetaByValue = new Map(TIME_SLOT_META.map((item) => [item.value, item]));
 const timeSlotOrder = new Map(TIME_SLOT_META.map((item, index) => [item.value, index]));
@@ -45,9 +54,25 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 0,
   maximumFractionDigits: 2,
 });
+const decimalFormatter = new Intl.NumberFormat("en-US", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+const integerFormatter = new Intl.NumberFormat("en-US", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+});
 
 function centsToCurrency(cents) {
   return currencyFormatter.format((cents || 0) / 100);
+}
+
+function formatDecimal(value) {
+  return decimalFormatter.format(value || 0);
+}
+
+function formatInteger(value) {
+  return integerFormatter.format(value || 0);
 }
 
 function formatDelta(delta) {
@@ -135,7 +160,47 @@ async function fetchDashboard() {
   return response.json();
 }
 
+function calculateRakeback(summary) {
+  const totalBuyInsCents = Number(summary.total_buy_ins_cents || 0);
+  const declaredRakeCents = totalBuyInsCents * (DECLARED_RAKE_PCT / 100);
+  const gemsFarmed = declaredRakeCents * state.rakebackMultiplier;
+  const rakebackCents = state.gemsPerDollar > 0
+    ? (gemsFarmed * 100) / state.gemsPerDollar
+    : 0;
+  const profitWithoutRakebackCents = Number(summary.net_profit_cents || 0);
+  const profitWithRakebackCents = profitWithoutRakebackCents + rakebackCents;
+  const roiWithRakebackPct = totalBuyInsCents > 0
+    ? (profitWithRakebackCents / totalBuyInsCents) * 100
+    : 0;
+
+  return {
+    declaredRakeCents,
+    gemsFarmed,
+    rakebackCents,
+    profitWithoutRakebackCents,
+    profitWithRakebackCents,
+    roiWithRakebackPct,
+  };
+}
+
+function renderRakebackControls() {
+  const multiplierInput = document.getElementById("rakeback-multiplier");
+  const gemsPerDollarInput = document.getElementById("gems-per-dollar");
+  const multiplierValue = document.getElementById("rakeback-multiplier-value");
+  const gemsPerDollarValue = document.getElementById("gems-per-dollar-value");
+
+  multiplierInput.value = String(
+    Math.max(RAKEBACK_MULTIPLIER_OPTIONS.indexOf(state.rakebackMultiplier), 0)
+  );
+  gemsPerDollarInput.value = String(
+    Math.max(GEMS_PER_DOLLAR_OPTIONS.indexOf(state.gemsPerDollar), 0)
+  );
+  multiplierValue.textContent = `${formatDecimal(state.rakebackMultiplier)}x`;
+  gemsPerDollarValue.textContent = `${formatInteger(state.gemsPerDollar)} gems / $1`;
+}
+
 function renderSummary(summary) {
+  const rakeback = calculateRakeback(summary);
   const items = [
     {
       label: "Турниров",
@@ -174,31 +239,48 @@ function renderSummary(summary) {
       tone: "is-soft",
     },
     {
+      label: "Фактический рейк",
+      value: `${summary.actual_rake_pct.toFixed(2)}%`,
+      note: `Собрано ${centsToCurrency(summary.total_entry_buy_ins_cents)}, выплачено ${centsToCurrency(summary.total_prize_pools_cents)}`,
+      tone: "is-soft",
+    },
+    {
       label: "Средняя доля призпула",
       value: `${summary.average_prize_pool_share_pct.toFixed(2)}%`,
       note: "Какой % от призового фонда вы забираете в среднем",
       tone: "is-soft",
     },
     {
-      label: "Чистый результат",
-      value: centsToCurrency(summary.net_profit_cents),
-      note: "Выплаты минус бай-ины",
+      label: "Прибыль с рейкбеком",
+      value: centsToCurrency(rakeback.profitWithRakebackCents),
+      note: `Без рейкбека ${centsToCurrency(rakeback.profitWithoutRakebackCents)} + рейкбек ${centsToCurrency(rakeback.rakebackCents)}`,
       tone: "is-profit",
     },
     {
-      label: "ROI",
+      label: "Рейкбек нафармлено",
+      value: centsToCurrency(rakeback.rakebackCents),
+      note: `${formatDecimal(rakeback.gemsFarmed)} gems при ${formatDecimal(state.rakebackMultiplier)}x и курсе ${formatInteger(state.gemsPerDollar)} gems / $1`,
+      tone: "is-profit",
+    },
+    {
+      label: "Прибыль без рейкбека",
+      value: centsToCurrency(rakeback.profitWithoutRakebackCents),
+      note: "Выплаты минус бай-ины, как и было раньше",
+      tone: "is-profit",
+    },
+    {
+      label: "ROI без рейкбека",
       value: `${summary.roi_pct.toFixed(2)}%`,
-      note: `Чистый результат / сумма бай-инов: ${centsToCurrency(summary.total_buy_ins_cents)}`,
+      note: `Чистый результат ${centsToCurrency(rakeback.profitWithoutRakebackCents)} / сумма бай-инов ${centsToCurrency(summary.total_buy_ins_cents)}`,
+      tone: "is-profit",
+    },
+    {
+      label: "ROI с рейкбеком",
+      value: `${rakeback.roiWithRakebackPct.toFixed(2)}%`,
+      note: `Без рейкбека ${summary.roi_pct.toFixed(2)}% при сумме бай-инов ${centsToCurrency(summary.total_buy_ins_cents)}`,
       tone: "is-profit",
     },
   ];
-
-  items.splice(6, 0, {
-    label: "\u0424\u0430\u043a\u0442\u0438\u0447\u0435\u0441\u043a\u0438\u0439 \u0440\u0435\u0439\u043a",
-    value: `${summary.actual_rake_pct.toFixed(2)}%`,
-    note: `\u0421\u043e\u0431\u0440\u0430\u043d\u043e ${centsToCurrency(summary.total_entry_buy_ins_cents)}, \u0432\u044b\u043f\u043b\u0430\u0447\u0435\u043d\u043e ${centsToCurrency(summary.total_prize_pools_cents)}`,
-    tone: "is-soft",
-  });
 
   document.getElementById("summary-grid").innerHTML = items
     .map(
@@ -538,6 +620,7 @@ function renderStartedAtBounds(filters) {
 
 async function refreshDashboard() {
   const payload = await fetchDashboard();
+  state.dashboard = payload;
   state.filters = payload.filters;
   renderBuyInOptions(payload.filters.buy_ins_cents);
   renderMultiplierOptions(payload.filters.multipliers);
@@ -545,6 +628,7 @@ async function refreshDashboard() {
   renderTimeSlotOptions(payload.filters.time_slots || []);
   renderPrizePoolHints(payload.filters.prize_pools_cents);
   renderStartedAtBounds(payload.filters);
+  renderRakebackControls();
   renderSummary(payload.summary);
   renderDistribution(payload.distribution, payload.summary.total_tournaments);
   renderPrizePoolFrequency(payload.prize_pool_frequency_by_buy_in);
@@ -564,6 +648,8 @@ function wireInputs() {
   const maxInput = document.getElementById("prize-pool-max");
   const startedAtFromInput = document.getElementById("started-at-from");
   const startedAtToInput = document.getElementById("started-at-to");
+  const rakebackMultiplierInput = document.getElementById("rakeback-multiplier");
+  const gemsPerDollarInput = document.getElementById("gems-per-dollar");
   const resetButton = document.getElementById("reset-filters");
   const uploadForm = document.getElementById("upload-form");
   const archiveInput = document.getElementById("archive-input");
@@ -587,6 +673,23 @@ function wireInputs() {
   startedAtFromInput.addEventListener("change", handleStartedAtChange);
   startedAtToInput.addEventListener("change", handleStartedAtChange);
 
+  function rerenderSummaryIfReady() {
+    renderRakebackControls();
+    if (state.dashboard) {
+      renderSummary(state.dashboard.summary);
+    }
+  }
+
+  rakebackMultiplierInput.addEventListener("input", () => {
+    state.rakebackMultiplier = RAKEBACK_MULTIPLIER_OPTIONS[Number(rakebackMultiplierInput.value)] ?? DEFAULT_RAKEBACK_MULTIPLIER;
+    rerenderSummaryIfReady();
+  });
+
+  gemsPerDollarInput.addEventListener("input", () => {
+    state.gemsPerDollar = GEMS_PER_DOLLAR_OPTIONS[Number(gemsPerDollarInput.value)] ?? DEFAULT_GEMS_PER_DOLLAR;
+    rerenderSummaryIfReady();
+  });
+
   resetButton.addEventListener("click", async () => {
     state.selectedBuyIns.clear();
     state.selectedMultipliers.clear();
@@ -596,10 +699,13 @@ function wireInputs() {
     state.prizePoolMax = "";
     state.startedAtFrom = "";
     state.startedAtTo = "";
+    state.rakebackMultiplier = DEFAULT_RAKEBACK_MULTIPLIER;
+    state.gemsPerDollar = DEFAULT_GEMS_PER_DOLLAR;
     minInput.value = "";
     maxInput.value = "";
     startedAtFromInput.value = "";
     startedAtToInput.value = "";
+    renderRakebackControls();
     await refreshDashboard();
   });
 
@@ -637,6 +743,7 @@ function wireInputs() {
 
 async function bootstrap() {
   wireInputs();
+  renderRakebackControls();
   await refreshDashboard();
 }
 
