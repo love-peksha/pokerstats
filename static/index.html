@@ -8,174 +8,219 @@
   </head>
   <body>
     <div class="page-shell">
-      <header class="hero">
+      <div class="ambient ambient-one"></div>
+      <div class="ambient ambient-two"></div>
+
+      <header class="hero panel panel-hero">
         <div class="hero-copy">
           <p class="eyebrow">Локальная статистика турниров</p>
-          <h1>Вся турнирная история в одном аккуратном дашборде</h1>
+          <h1>История спинов в одном сильном рабочем дашборде</h1>
           <p class="hero-text">
-            Загружайте ZIP-архивы, копите общую базу и сразу видьте картину по местам,
-            бай-инам, множителям и призовым фондам без ручной сверки файлов.
+            Загружайте ZIP-архивы, копите общую базу и сразу смотрите, как меняются ваши места,
+            призпулы, ROI и итоговая прибыль с учётом рейкбека.
           </p>
           <div class="hero-badges">
             <span>Импорт ZIP в пару кликов</span>
-            <span>Фильтры по бай-ину и множителю</span>
-            <span>Локальная SQLite база</span>
+            <span>Фильтры по бай-ину, времени и множителю</span>
+            <span>Локальная SQLite-база без внешних сервисов</span>
           </div>
         </div>
-        <form id="upload-form" class="upload-card">
-          <p class="upload-kicker">Обновить базу</p>
-          <label class="upload-label" for="archive-input">Добавить новые архивы</label>
-          <input id="archive-input" name="archives" type="file" accept=".zip" multiple>
-          <button type="submit">Импортировать</button>
-          <p class="upload-hint">После импорта турниры сразу появятся в общей статистике.</p>
-          <div id="upload-status" class="status"></div>
-        </form>
+
+        <div class="hero-side">
+          <form id="upload-form" class="upload-card">
+            <p class="upload-kicker">Обновить базу</p>
+            <label class="upload-label" for="archive-input">Добавить новые архивы</label>
+            <input id="archive-input" name="archives" type="file" accept=".zip" multiple>
+            <button type="submit">Импортировать</button>
+            <p class="upload-hint">После импорта турниры сразу появляются в общей статистике.</p>
+            <div id="upload-status" class="status"></div>
+          </form>
+
+          <section class="hero-note">
+            <p class="hero-note-kicker">Что внутри</p>
+            <div class="hero-note-list">
+              <article>
+                <strong>Чистая сводка</strong>
+                <span>Ключевые метрики вынесены наверх и читаются без поиска по экрану.</span>
+              </article>
+              <article>
+                <strong>Контроль рейкбека</strong>
+                <span>Профит пересчитывается сразу при смене multiplier и курса gems.</span>
+              </article>
+              <article>
+                <strong>Локально и быстро</strong>
+                <span>Все данные остаются на вашей машине и открываются без лишней магии.</span>
+              </article>
+            </div>
+          </section>
+        </div>
       </header>
 
-      <main class="dashboard">
-        <section class="panel filters-panel">
-          <div class="panel-heading">
-            <h2>Фильтры</h2>
-            <button id="reset-filters" class="secondary" type="button">Сбросить</button>
-          </div>
-
-          <div class="filters-grid">
-            <div class="filter-block">
-              <span class="filter-label">Бай-ин</span>
-              <div id="buyin-options" class="chip-grid"></div>
-            </div>
-            <div class="filter-block">
-              <span class="filter-label">Множитель</span>
-              <div id="multiplier-options" class="chip-grid"></div>
-            </div>
-
-            <div class="filter-block">
-              <span class="filter-label">Призовой фонд</span>
-              <div class="range-grid">
-                <label>
-                  <span>От</span>
-                  <input id="prize-pool-min" type="number" min="0" step="0.01" placeholder="например 8">
-                </label>
-                <label>
-                  <span>До</span>
-                  <input id="prize-pool-max" type="number" min="0" step="0.01" placeholder="например 30">
-                </label>
+      <main class="dashboard-layout">
+        <aside class="control-rail">
+          <section class="panel filters-panel">
+            <div class="panel-heading panel-heading-stack">
+              <div>
+                <p class="section-kicker">Control Deck</p>
+                <h2>Фильтры и рейкбек</h2>
+                <p class="caption">Соберите нужный срез и сразу смотрите, как меняются цифры справа.</p>
               </div>
-              <div id="prize-pool-hints" class="hint-list"></div>
+              <button id="reset-filters" class="secondary" type="button">Сбросить</button>
             </div>
 
-            <div class="filter-block filter-block-rakeback">
-              <span class="filter-label">Рейкбек</span>
-              <div class="slider-stack">
-                <label class="slider-field">
-                  <div class="slider-head">
-                    <span>Multiplier в программе</span>
-                    <strong id="rakeback-multiplier-value">1.5x</strong>
-                  </div>
-                  <input
-                    id="rakeback-multiplier"
-                    type="range"
-                    min="0"
-                    max="7"
-                    step="1"
-                    value="0"
-                  >
-                  <div class="slider-extremes">
-                    <span>1.5x</span>
-                    <span>5x</span>
-                  </div>
-                </label>
-
-                <label class="slider-field">
-                  <div class="slider-head">
-                    <span>Курс обмена gems</span>
-                    <strong id="gems-per-dollar-value">1000 gems / $1</strong>
-                  </div>
-                  <input
-                    id="gems-per-dollar"
-                    type="range"
-                    min="0"
-                    max="11"
-                    step="1"
-                    value="0"
-                  >
-                  <div class="slider-extremes">
-                    <span>1000</span>
-                    <span>650</span>
-                  </div>
-                </label>
+            <div class="filters-grid">
+              <div class="filter-block">
+                <span class="filter-label">Бай-ин</span>
+                <div id="buyin-options" class="chip-grid"></div>
               </div>
-              <p class="rakeback-note">Расчёт идёт от заявленного рейка 7%.</p>
-            </div>
 
-            <div class="filter-block filter-block-date">
-              <span class="filter-label">Дата и время</span>
-              <div class="date-filter-layout">
-                <div class="date-filter-section">
-                  <span class="subfilter-label">Период</span>
-                  <div class="range-grid date-range-grid">
-                    <label>
-                      <span>От</span>
-                      <input id="started-at-from" type="datetime-local">
-                    </label>
-                    <label>
-                      <span>До</span>
-                      <input id="started-at-to" type="datetime-local">
-                    </label>
+              <div class="filter-block">
+                <span class="filter-label">Множитель</span>
+                <div id="multiplier-options" class="chip-grid"></div>
+              </div>
+
+              <div class="filter-block filter-block-rakeback">
+                <span class="filter-label">Рейкбек</span>
+                <div class="slider-stack">
+                  <label class="slider-field">
+                    <div class="slider-head">
+                      <span>Multiplier в программе</span>
+                      <strong id="rakeback-multiplier-value">1.5x</strong>
+                    </div>
+                    <input
+                      id="rakeback-multiplier"
+                      type="range"
+                      min="0"
+                      max="7"
+                      step="1"
+                      value="0"
+                    >
+                    <div class="slider-extremes">
+                      <span>1.5x</span>
+                      <span>5x</span>
+                    </div>
+                  </label>
+
+                  <label class="slider-field">
+                    <div class="slider-head">
+                      <span>Курс обмена gems</span>
+                      <strong id="gems-per-dollar-value">1000 gems / $1</strong>
+                    </div>
+                    <input
+                      id="gems-per-dollar"
+                      type="range"
+                      min="0"
+                      max="11"
+                      step="1"
+                      value="0"
+                    >
+                    <div class="slider-extremes">
+                      <span>1000</span>
+                      <span>650</span>
+                    </div>
+                  </label>
+                </div>
+                <p class="rakeback-note">Расчёт идёт от заявленного рейка 7%.</p>
+              </div>
+
+              <div class="filter-block filter-block-date">
+                <span class="filter-label">Дата и время</span>
+                <div class="date-filter-layout">
+                  <div class="date-filter-section">
+                    <span class="subfilter-label">Период</span>
+                    <div class="range-grid date-range-grid">
+                      <label>
+                        <span>От</span>
+                        <input id="started-at-from" type="datetime-local">
+                      </label>
+                      <label>
+                        <span>До</span>
+                        <input id="started-at-to" type="datetime-local">
+                      </label>
+                    </div>
                   </div>
-                </div>
-                <div class="date-filter-section">
-                  <span class="subfilter-label">Дни недели</span>
-                  <div id="weekday-options" class="chip-grid weekday-grid"></div>
-                </div>
-                <div class="date-filter-section">
-                  <span class="subfilter-label">Время суток</span>
-                  <div id="time-slot-options" class="chip-grid time-slot-grid"></div>
+
+                  <div class="date-filter-section">
+                    <span class="subfilter-label">Дни недели</span>
+                    <div id="weekday-options" class="chip-grid weekday-grid"></div>
+                  </div>
+
+                  <div class="date-filter-section">
+                    <span class="subfilter-label">Время суток</span>
+                    <div id="time-slot-options" class="chip-grid time-slot-grid"></div>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
+        </aside>
 
-        <section class="summary-grid" id="summary-grid"></section>
+        <section class="content-column">
+          <section class="section-intro">
+            <div>
+              <p class="section-kicker">Overview</p>
+              <h2>Ключевые метрики по текущему срезу</h2>
+            </div>
+            <p class="section-copy">
+              Важные цифры собраны первыми: база, ран, прибыль, ROI и рейкбек без ручного пересчёта.
+            </p>
+          </section>
 
-        <section class="panel">
-          <div class="panel-heading">
-            <h2>Распределение мест</h2>
-            <p id="distribution-caption" class="caption"></p>
-          </div>
-          <div id="distribution-table" class="distribution-table"></div>
-        </section>
+          <section class="summary-grid" id="summary-grid"></section>
 
-        <section class="panel">
-          <div class="panel-heading">
-            <h2>Частота призпула по бай-ину</h2>
-            <p class="caption">Проценты считаются внутри каждого бай-ина, отметка на шкале показывает ожидание</p>
-          </div>
-          <div id="prize-pool-frequency"></div>
-        </section>
-
-        <section class="double-grid">
           <section class="panel">
             <div class="panel-heading">
-              <h2>По бай-инам</h2>
+              <div>
+                <p class="section-kicker">Places</p>
+                <h2>Распределение мест</h2>
+              </div>
+              <p id="distribution-caption" class="caption"></p>
             </div>
-            <div id="buyin-breakdown"></div>
+            <div id="distribution-table" class="distribution-table"></div>
           </section>
 
           <section class="panel">
             <div class="panel-heading">
-              <h2>По призовому фонду</h2>
+              <div>
+                <p class="section-kicker">Prize Pools</p>
+                <h2>Частота призпула по бай-ину</h2>
+              </div>
+              <p class="caption">Проценты считаются внутри каждого бай-ина, отметка на шкале показывает ожидание.</p>
             </div>
-            <div id="prize-breakdown"></div>
+            <div id="prize-pool-frequency"></div>
           </section>
-        </section>
 
-        <section class="panel">
-          <div class="panel-heading">
-            <h2>Последние турниры</h2>
-          </div>
-          <div id="recent-table"></div>
+          <section class="double-grid">
+            <section class="panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-kicker">Breakdown</p>
+                  <h2>По бай-инам</h2>
+                </div>
+              </div>
+              <div id="buyin-breakdown"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-kicker">Breakdown</p>
+                  <h2>По призовому фонду</h2>
+                </div>
+              </div>
+              <div id="prize-breakdown"></div>
+            </section>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">Recent</p>
+                <h2>Последние турниры</h2>
+              </div>
+            </div>
+            <div id="recent-table"></div>
+          </section>
         </section>
       </main>
     </div>

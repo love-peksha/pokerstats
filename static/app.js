@@ -3,8 +3,6 @@ const state = {
   selectedMultipliers: new Set(),
   selectedWeekdays: new Set(),
   selectedTimeSlots: new Set(),
-  prizePoolMin: "",
-  prizePoolMax: "",
   startedAtFrom: "",
   startedAtTo: "",
   rakebackMultiplier: 1.5,
@@ -135,12 +133,6 @@ function buildQueryString() {
     .sort((left, right) => (timeSlotOrder.get(left) ?? 0) - (timeSlotOrder.get(right) ?? 0))
     .forEach((value) => params.append("time_slot", value));
 
-  if (state.prizePoolMin !== "") {
-    params.set("prize_pool_min", state.prizePoolMin);
-  }
-  if (state.prizePoolMax !== "") {
-    params.set("prize_pool_max", state.prizePoolMax);
-  }
   if (state.startedAtFrom !== "") {
     params.set("started_at_from", state.startedAtFrom);
   }
@@ -207,85 +199,98 @@ function renderSummary(summary) {
       value: summary.total_tournaments,
       note: "По текущему набору фильтров",
       tone: "is-primary",
+      layout: "is-compact",
     },
     {
       label: "Побед",
       value: `${summary.wins} (${summary.win_rate}%)`,
       note: "Первое место",
       tone: "is-accent",
+      layout: "is-compact",
     },
     {
       label: "Топ-2",
       value: `${summary.top_two} (${summary.top_two_rate}%)`,
       note: "Первое или второе место",
       tone: "is-accent",
+      layout: "is-compact",
     },
     {
       label: "Среднее место",
       value: summary.average_place.toFixed(2),
       note: "Чем меньше, тем лучше",
       tone: "is-soft",
+      layout: "is-compact",
     },
     {
       label: "ITM",
       value: `${summary.in_the_money} (${summary.in_the_money_rate}%)`,
       note: "Турниры с любым призом",
       tone: "is-soft",
+      layout: "is-compact",
     },
     {
       label: "Сумма бай-инов",
       value: centsToCurrency(summary.total_buy_ins_cents),
       note: "Общая сумма входов по текущему фильтру",
       tone: "is-soft",
+      layout: "is-compact",
     },
     {
       label: "Фактический рейк",
       value: `${summary.actual_rake_pct.toFixed(2)}%`,
       note: `Собрано ${centsToCurrency(summary.total_entry_buy_ins_cents)}, выплачено ${centsToCurrency(summary.total_prize_pools_cents)}`,
       tone: "is-soft",
+      layout: "is-compact",
     },
     {
       label: "Средняя доля призпула",
       value: `${summary.average_prize_pool_share_pct.toFixed(2)}%`,
       note: "Какой % от призового фонда вы забираете в среднем",
       tone: "is-soft",
+      layout: "is-compact",
     },
     {
       label: "Прибыль с рейкбеком",
       value: centsToCurrency(rakeback.profitWithRakebackCents),
       note: `Без рейкбека ${centsToCurrency(rakeback.profitWithoutRakebackCents)} + рейкбек ${centsToCurrency(rakeback.rakebackCents)}`,
       tone: "is-profit",
-    },
-    {
-      label: "Рейкбек нафармлено",
-      value: centsToCurrency(rakeback.rakebackCents),
-      note: `${formatDecimal(rakeback.gemsFarmed)} gems при ${formatDecimal(state.rakebackMultiplier)}x и курсе ${formatInteger(state.gemsPerDollar)} gems / $1`,
-      tone: "is-profit",
+      layout: "is-feature",
     },
     {
       label: "Прибыль без рейкбека",
       value: centsToCurrency(rakeback.profitWithoutRakebackCents),
       note: "Выплаты минус бай-ины, как и было раньше",
       tone: "is-profit",
+      layout: "is-feature",
+    },
+    {
+      label: "Рейкбек нафармлено",
+      value: centsToCurrency(rakeback.rakebackCents),
+      note: `${formatDecimal(rakeback.gemsFarmed)} gems при ${formatDecimal(state.rakebackMultiplier)}x и курсе ${formatInteger(state.gemsPerDollar)} gems / $1`,
+      tone: "is-profit",
+      layout: "is-mid",
     },
     {
       label: "ROI без рейкбека",
       value: `${summary.roi_pct.toFixed(2)}%`,
       note: `Чистый результат ${centsToCurrency(rakeback.profitWithoutRakebackCents)} / сумма бай-инов ${centsToCurrency(summary.total_buy_ins_cents)}`,
       tone: "is-profit",
+      layout: "is-mid",
     },
     {
       label: "ROI с рейкбеком",
       value: `${rakeback.roiWithRakebackPct.toFixed(2)}%`,
       note: `Без рейкбека ${summary.roi_pct.toFixed(2)}% при сумме бай-инов ${centsToCurrency(summary.total_buy_ins_cents)}`,
       tone: "is-profit",
+      layout: "is-mid",
     },
   ];
 
   document.getElementById("summary-grid").innerHTML = items
     .map(
       (item) => `
-        <article class="summary-card ${item.tone}">
+        <article class="summary-card ${item.tone} ${item.layout || "is-compact"}">
           <p class="summary-label">${escapeHtml(item.label)}</p>
           <h3 class="summary-value">${escapeHtml(item.value)}</h3>
           <p class="summary-note">${escapeHtml(item.note)}</p>
@@ -586,26 +591,6 @@ function renderTimeSlotOptions(timeSlots) {
   });
 }
 
-function renderPrizePoolHints(prizePools) {
-  const hints = prizePools
-    .slice(0, 12)
-    .map((valueCents) => `<button type="button" class="hint-pill" data-prize="${valueCents}">${centsToCurrency(valueCents)}</button>`)
-    .join("");
-
-  const container = document.getElementById("prize-pool-hints");
-  container.innerHTML = hints;
-  container.querySelectorAll("button").forEach((button) => {
-    button.addEventListener("click", async () => {
-      const dollars = (Number(button.dataset.prize) / 100).toString();
-      document.getElementById("prize-pool-min").value = dollars;
-      document.getElementById("prize-pool-max").value = dollars;
-      state.prizePoolMin = dollars;
-      state.prizePoolMax = dollars;
-      await refreshDashboard();
-    });
-  });
-}
-
 function renderStartedAtBounds(filters) {
   const startedAtFromInput = document.getElementById("started-at-from");
   const startedAtToInput = document.getElementById("started-at-to");
@@ -626,7 +611,6 @@ async function refreshDashboard() {
   renderMultiplierOptions(payload.filters.multipliers);
   renderWeekdayOptions(payload.filters.weekdays || []);
   renderTimeSlotOptions(payload.filters.time_slots || []);
-  renderPrizePoolHints(payload.filters.prize_pools_cents);
   renderStartedAtBounds(payload.filters);
   renderRakebackControls();
   renderSummary(payload.summary);
@@ -644,8 +628,6 @@ async function refreshDashboard() {
 }
 
 function wireInputs() {
-  const minInput = document.getElementById("prize-pool-min");
-  const maxInput = document.getElementById("prize-pool-max");
   const startedAtFromInput = document.getElementById("started-at-from");
   const startedAtToInput = document.getElementById("started-at-to");
   const rakebackMultiplierInput = document.getElementById("rakeback-multiplier");
@@ -654,15 +636,6 @@ function wireInputs() {
   const uploadForm = document.getElementById("upload-form");
   const archiveInput = document.getElementById("archive-input");
   const uploadStatus = document.getElementById("upload-status");
-
-  async function handleRangeChange() {
-    state.prizePoolMin = minInput.value.trim();
-    state.prizePoolMax = maxInput.value.trim();
-    await refreshDashboard();
-  }
-
-  minInput.addEventListener("change", handleRangeChange);
-  maxInput.addEventListener("change", handleRangeChange);
 
   async function handleStartedAtChange() {
     state.startedAtFrom = startedAtFromInput.value;
@@ -695,14 +668,10 @@ function wireInputs() {
     state.selectedMultipliers.clear();
     state.selectedWeekdays.clear();
     state.selectedTimeSlots.clear();
-    state.prizePoolMin = "";
-    state.prizePoolMax = "";
     state.startedAtFrom = "";
     state.startedAtTo = "";
     state.rakebackMultiplier = DEFAULT_RAKEBACK_MULTIPLIER;
     state.gemsPerDollar = DEFAULT_GEMS_PER_DOLLAR;
-    minInput.value = "";
-    maxInput.value = "";
     startedAtFromInput.value = "";
     startedAtToInput.value = "";
     renderRakebackControls();
